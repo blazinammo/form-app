@@ -3,6 +3,7 @@ const session = require('express-session');
 const helmet = require('helmet');
 const fs = require('node:fs/promises');
 const path = require('node:path');
+const { createClient } = require('@supabase/supabase-js');
 const { normalizeForm, validateForm } = require('./lib/schema');
 
 const app = express();
@@ -10,6 +11,9 @@ const port = Number(process.env.PORT || 3000);
 const dataDir = process.env.DATA_DIR || path.join(__dirname, 'data');
 const dataFile = path.join(dataDir, 'form-state.json');
 const initialForm = normalizeForm({ formTitle: 'Welcome to FormFlow', pages: [{ title: 'Start here', description: 'Create your first published form.', questions: [] }] });
+const supabase = process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
+  ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
+  : null;
 
 if (process.env.NODE_ENV === 'production') app.set('trust proxy', 1);
 app.use(helmet({ contentSecurityPolicy: false }));
@@ -24,6 +28,14 @@ app.use(session({
 app.use(express.static(path.join(__dirname, 'public')));
 
 async function readState() {
+  if (supabase) {
+    const { data, error } = await supabase.from('form_state').select('state').eq('id', 1).maybeSingle();
+    if (error) throw error;
+    if (data?.state) return data.state;
+    const state = { draft: initialForm, published: null, publishedAt: null, version: 0 };
+    await writeState(state);
+    return state;
+  }
   try { return JSON.parse(await fs.readFile(dataFile, 'utf8')); }
   catch (error) {
     if (error.code !== 'ENOENT') throw error;
@@ -33,6 +45,11 @@ async function readState() {
   }
 }
 async function writeState(state) {
+  if (supabase) {
+    const { error } = await supabase.from('form_state').upsert({ id: 1, state, updated_at: new Date().toISOString() });
+    if (error) throw error;
+    return;
+  }
   await fs.mkdir(dataDir, { recursive: true });
   await fs.writeFile(dataFile, JSON.stringify(state, null, 2));
 }

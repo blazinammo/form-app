@@ -13,6 +13,7 @@
     "node": ">=20"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.112.4",
     "express": "^5.1.0",
     "express-session": "^1.18.2",
     "helmet": "^8.1.0"

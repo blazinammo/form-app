@@ -8,7 +8,7 @@ FormFlow is a small full-stack form builder with a protected admin editor and a 
 2. Run `npm install`.
 3. Run `npm start` and open `http://localhost:3000/` for the admin login or `http://localhost:3000/form.html` for the public form.
 
-The server stores `data/form-state.json` locally by default. The data directory is ignored by Git.
+The server stores `data/form-state.json` locally by default. The data directory is ignored by Git. If `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are set, the server uses the Supabase `form_state` row with `id = 1` instead.
 
 ## How it works
 
@@ -18,9 +18,9 @@ Admin credentials come from environment variables and the session cookie is HTTP
 
 ## Render and GitHub
 
-Push this repository to GitHub, then create a Render web service from the repository. `render.yaml` supplies the Node build/start commands, generated session secret, and a 1 GB persistent disk mounted at `/var/data`. Set `ADMIN_USERNAME` and `ADMIN_PASSWORD` as private Render environment variables.
+Push this repository to GitHub, then create a Render web service from the repository. Set `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `SUPABASE_URL`, and `SUPABASE_SERVICE_ROLE_KEY` as private Render environment variables. The Supabase secret key must stay server-side.
 
-The persistent disk makes JSON storage durable for this single service instance, but it is not a multi-instance database. If horizontal scaling or concurrent writers are required, replace the persistence module with a managed database or external storage service.
+Supabase is the production source of truth when configured. The local JSON fallback is intended for development only. The existing Render disk configuration is optional and is not needed when Supabase is active.
 
 ## Tests
 

@@ -4,18 +4,18 @@ services:
     runtime: node
     buildCommand: npm ci
     startCommand: npm start
-    disk:
-      name: formflow-data
-      mountPath: /var/data
-      sizeGB: 1
     envVars:
       - key: NODE_ENV
         value: production
       - key: DATA_DIR
-        value: /var/data
+        value: ./data
       - key: SESSION_SECRET
         generateValue: true
       - key: ADMIN_USERNAME
         sync: false
       - key: ADMIN_PASSWORD
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
