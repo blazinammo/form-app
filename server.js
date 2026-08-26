@@ -56,7 +56,8 @@ async function writeState(state) {
 function adminOnly(req, res, next) { return req.session.isAdmin ? next() : res.status(401).json({ error: 'Authentication required.' }); }
 function credentialsConfigured() { return Boolean(process.env.ADMIN_USERNAME && process.env.ADMIN_PASSWORD); }
 function hydrateState(state) {
-  const source = state && typeof state === 'object' ? state : {};
+  const raw = state && typeof state === 'object' ? state : {};
+  const source = raw.state && typeof raw.state === 'object' && !raw.draft ? raw.state : raw;
   return {
     draft: normalizeForm(source.draft || initialForm),
     published: source.published ? normalizeForm(source.published) : null,

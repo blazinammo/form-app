@@ -26,3 +26,8 @@ test('hydrates a Supabase row with an empty draft', () => {
   assert.ok(state.draft.pages.length > 0);
   assert.equal(state.published, null);
 });
+
+test('hydrates a nested persisted state shape', () => {
+  const state = hydrateState({ state: { draft: { pages: [{ title: 'Saved page' }] } } });
+  assert.equal(state.draft.pages[0].title, 'Saved page');
+});
