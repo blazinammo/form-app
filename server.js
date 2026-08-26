@@ -31,12 +31,12 @@ async function readState() {
   if (supabase) {
     const { data, error } = await supabase.from('form_state').select('state').eq('id', 1).maybeSingle();
     if (error) throw error;
-    if (data?.state) return data.state;
+    if (data?.state) return hydrateState(data.state);
     const state = { draft: initialForm, published: null, publishedAt: null, version: 0 };
     await writeState(state);
     return state;
   }
-  try { return JSON.parse(await fs.readFile(dataFile, 'utf8')); }
+  try { return hydrateState(JSON.parse(await fs.readFile(dataFile, 'utf8'))); }
   catch (error) {
     if (error.code !== 'ENOENT') throw error;
     const state = { draft: initialForm, published: null, publishedAt: null, version: 0 };
@@ -55,6 +55,15 @@ async function writeState(state) {
 }
 function adminOnly(req, res, next) { return req.session.isAdmin ? next() : res.status(401).json({ error: 'Authentication required.' }); }
 function credentialsConfigured() { return Boolean(process.env.ADMIN_USERNAME && process.env.ADMIN_PASSWORD); }
+function hydrateState(state) {
+  const source = state && typeof state === 'object' ? state : {};
+  return {
+    draft: normalizeForm(source.draft || initialForm),
+    published: source.published ? normalizeForm(source.published) : null,
+    publishedAt: source.publishedAt || null,
+    version: Number(source.version) || 0
+  };
+}
 
 app.get('/api/auth/session', (req, res) => res.json({ authenticated: Boolean(req.session.isAdmin), configured: credentialsConfigured() }));
 app.post('/api/auth/login', (req, res) => {
@@ -93,4 +102,4 @@ app.get('/api/public/form', async (req, res, next) => {
 
 app.use((error, req, res, next) => { console.error(error); res.status(500).json({ error: 'The server could not complete that request.' }); });
 if (require.main === module) app.listen(port, () => console.log(`FormFlow listening on port ${port}`));
-module.exports = { app, readState, writeState };
+module.exports = { app, readState, writeState, hydrateState };

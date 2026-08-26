@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { normalizeForm, validateForm } = require('../lib/schema');
+const { hydrateState } = require('../server');
 
 test('normalizes legacy form shapes with defaults', () => {
   const form = normalizeForm({ pages: [{ title: 'One', questions: [{ text: 'Name', type: 'text' }] }] });
@@ -18,4 +19,10 @@ test('rejects an empty or unroutable form', () => {
 test('accepts a valid published form', () => {
   const result = validateForm({ pages: [{ id: 'p1', title: 'Start', isEnd: true, questions: [{ id: 'q1', text: 'Choose', type: 'radio', answers: [{ id: 'a1', text: 'Yes' }] }] }] });
   assert.equal(result.valid, true);
+});
+
+test('hydrates a Supabase row with an empty draft', () => {
+  const state = hydrateState({ draft: null, published: null, publishedAt: null, version: 0 });
+  assert.ok(state.draft.pages.length > 0);
+  assert.equal(state.published, null);
 });
