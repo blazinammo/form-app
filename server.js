@@ -11,6 +11,7 @@ const dataDir = process.env.DATA_DIR || path.join(__dirname, 'data');
 const dataFile = path.join(dataDir, 'form-state.json');
 const initialForm = normalizeForm({ formTitle: 'Welcome to FormFlow', pages: [{ title: 'Start here', description: 'Create your first published form.', questions: [] }] });
 
+if (process.env.NODE_ENV === 'production') app.set('trust proxy', 1);
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(express.json({ limit: '8mb' }));
 app.use(session({
