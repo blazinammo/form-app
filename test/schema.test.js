@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { normalizeForm, validateForm } = require('../lib/schema');
-const { hydrateState, storageErrorMessage } = require('../server');
+const { hydrateState, storageErrorMessage, supabaseProjectUrl } = require('../server');
 
 test('normalizes legacy form shapes with defaults', () => {
   const form = normalizeForm({ pages: [{ title: 'One', questions: [{ text: 'Name', type: 'text' }] }] });
@@ -36,4 +36,9 @@ test('explains common Supabase setup errors without exposing secrets', () => {
   assert.match(storageErrorMessage({ code: '42P01' }), /form_state is missing/);
   assert.match(storageErrorMessage({ code: '42501' }), /denied access/);
   assert.match(storageErrorMessage({ code: 'PGRST301' }), /provider code: PGRST301/);
+  assert.match(storageErrorMessage({ code: 'PGRST125' }), /without \/rest\/v1/);
+});
+
+test('normalizes a copied Supabase Data API URL', () => {
+  assert.equal(supabaseProjectUrl(' https://project.supabase.co/rest/v1/ '), 'https://project.supabase.co');
 });

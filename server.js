@@ -11,8 +11,12 @@ const port = Number(process.env.PORT || 3000);
 const dataDir = process.env.DATA_DIR || path.join(__dirname, 'data');
 const dataFile = path.join(dataDir, 'form-state.json');
 const initialForm = normalizeForm({ formTitle: 'Welcome to FormFlow', pages: [{ title: 'Start here', description: 'Create your first published form.', questions: [] }] });
-const supabase = process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
-  ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
+function supabaseProjectUrl(value) {
+  return String(value || '').trim().replace(/\/+$/, '').replace(/\/rest\/v1$/i, '');
+}
+const supabaseUrl = supabaseProjectUrl(process.env.SUPABASE_URL);
+const supabase = supabaseUrl && process.env.SUPABASE_SERVICE_ROLE_KEY
+  ? createClient(supabaseUrl, process.env.SUPABASE_SERVICE_ROLE_KEY.trim())
   : null;
 
 if (process.env.NODE_ENV === 'production') app.set('trust proxy', 1);
@@ -69,6 +73,7 @@ function storageErrorMessage(error) {
   if (error?.code === '42P01' || error?.code === 'PGRST205') return 'Supabase table form_state is missing. Create it using the SQL in README.md.';
   if (error?.code === 'PGRST204') return 'Supabase form_state schema is missing a required column. Check the SQL in README.md.';
   if (error?.code === '42501') return 'Supabase denied access to form_state. Check the server secret key and table permissions.';
+  if (error?.code === 'PGRST125') return 'Supabase received an invalid request. SUPABASE_URL must be the project URL, such as https://project-ref.supabase.co, without /rest/v1.';
   const providerCode = error?.code || error?.status || 'unknown';
   return `Supabase storage is unavailable (provider code: ${providerCode}). Check SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, and the form_state table.`;
 }
@@ -120,4 +125,4 @@ app.use((error, req, res, next) => {
   res.status(supabase ? 503 : 500).json({ error: supabase ? storageErrorMessage(error) : 'The server could not complete that request.' });
 });
 if (require.main === module) app.listen(port, () => console.log(`FormFlow listening on port ${port}`));
-module.exports = { app, readState, writeState, hydrateState, storageErrorMessage };
+module.exports = { app, readState, writeState, hydrateState, storageErrorMessage, supabaseProjectUrl };
