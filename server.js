@@ -69,7 +69,8 @@ function storageErrorMessage(error) {
   if (error?.code === '42P01' || error?.code === 'PGRST205') return 'Supabase table form_state is missing. Create it using the SQL in README.md.';
   if (error?.code === 'PGRST204') return 'Supabase form_state schema is missing a required column. Check the SQL in README.md.';
   if (error?.code === '42501') return 'Supabase denied access to form_state. Check the server secret key and table permissions.';
-  return 'Supabase storage is unavailable. Check SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, and the Render logs.';
+  const providerCode = error?.code || error?.status || 'unknown';
+  return `Supabase storage is unavailable (provider code: ${providerCode}). Check SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, and the form_state table.`;
 }
 
 app.get('/api/auth/session', (req, res) => res.json({ authenticated: Boolean(req.session.isAdmin), configured: credentialsConfigured() }));
@@ -81,6 +82,13 @@ app.post('/api/auth/login', (req, res) => {
   res.json({ authenticated: true });
 });
 app.post('/api/auth/logout', (req, res) => req.session.destroy(() => res.json({ authenticated: false })));
+
+app.get('/api/admin/storage-check', adminOnly, async (req, res) => {
+  if (!supabase) return res.json({ configured: false, storage: 'local-file' });
+  const { error } = await supabase.from('form_state').select('id').eq('id', 1).maybeSingle();
+  if (error) return res.status(503).json({ configured: true, storage: 'supabase', error: storageErrorMessage(error) });
+  res.json({ configured: true, storage: 'supabase', connected: true });
+});
 
 app.get('/api/admin/form', adminOnly, async (req, res, next) => { try { res.json(await readState()); } catch (error) { next(error); } });
 app.put('/api/admin/draft', adminOnly, async (req, res, next) => {

@@ -35,4 +35,5 @@ test('hydrates a nested persisted state shape', () => {
 test('explains common Supabase setup errors without exposing secrets', () => {
   assert.match(storageErrorMessage({ code: '42P01' }), /form_state is missing/);
   assert.match(storageErrorMessage({ code: '42501' }), /denied access/);
+  assert.match(storageErrorMessage({ code: 'PGRST301' }), /provider code: PGRST301/);
 });

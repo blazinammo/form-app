@@ -28,6 +28,8 @@ on conflict (id) do nothing;
 
 The server replaces a null draft with a starter form. The API reports a setup-specific error if the table or columns are missing.
 
+To diagnose a deployed service after signing in, open `/api/admin/storage-check`. A successful response contains `"connected": true`. If it reports a provider code, use that code and the Render service logs: invalid API-key errors mean the Supabase server secret is wrong, while `PGRST205` or `42P01` means the `form_state` table has not been created or is not visible through the Data API.
+
 ## How it works
 
 The admin editor loads the draft from `GET /api/admin/form`. `PUT /api/admin/draft` validates and stores draft changes. `POST /api/admin/publish` validates again and creates an immutable-in-practice latest snapshot with a version number and timestamp. The public page can only read that snapshot from `GET /api/public/form`; drafts are never exposed.
