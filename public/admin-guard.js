@@ -9,3 +9,16 @@ window.fetch = async (...args) => {
   }
   return response;
 };
+
+document.addEventListener('input', event => {
+  const input = event.target;
+  if (!input.matches('.question-head input.field')) return;
+  const value = input.value;
+  requestAnimationFrame(() => {
+    const replacement = [...document.querySelectorAll('.question-head input.field')]
+      .find(candidate => candidate.value === value);
+    if (!replacement) return;
+    replacement.focus();
+    replacement.setSelectionRange(value.length, value.length);
+  });
+}, true);
