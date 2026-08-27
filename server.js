@@ -65,6 +65,12 @@ function hydrateState(state) {
     version: Number(source.version) || 0
   };
 }
+function storageErrorMessage(error) {
+  if (error?.code === '42P01' || error?.code === 'PGRST205') return 'Supabase table form_state is missing. Create it using the SQL in README.md.';
+  if (error?.code === 'PGRST204') return 'Supabase form_state schema is missing a required column. Check the SQL in README.md.';
+  if (error?.code === '42501') return 'Supabase denied access to form_state. Check the server secret key and table permissions.';
+  return 'Supabase storage is unavailable. Check SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, and the Render logs.';
+}
 
 app.get('/api/auth/session', (req, res) => res.json({ authenticated: Boolean(req.session.isAdmin), configured: credentialsConfigured() }));
 app.post('/api/auth/login', (req, res) => {
@@ -101,6 +107,9 @@ app.get('/api/public/form', async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-app.use((error, req, res, next) => { console.error(error); res.status(500).json({ error: 'The server could not complete that request.' }); });
+app.use((error, req, res, next) => {
+  console.error('Storage/API error:', error);
+  res.status(supabase ? 503 : 500).json({ error: supabase ? storageErrorMessage(error) : 'The server could not complete that request.' });
+});
 if (require.main === module) app.listen(port, () => console.log(`FormFlow listening on port ${port}`));
-module.exports = { app, readState, writeState, hydrateState };
+module.exports = { app, readState, writeState, hydrateState, storageErrorMessage };

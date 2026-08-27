@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { normalizeForm, validateForm } = require('../lib/schema');
-const { hydrateState } = require('../server');
+const { hydrateState, storageErrorMessage } = require('../server');
 
 test('normalizes legacy form shapes with defaults', () => {
   const form = normalizeForm({ pages: [{ title: 'One', questions: [{ text: 'Name', type: 'text' }] }] });
@@ -30,4 +30,9 @@ test('hydrates a Supabase row with an empty draft', () => {
 test('hydrates a nested persisted state shape', () => {
   const state = hydrateState({ state: { draft: { pages: [{ title: 'Saved page' }] } } });
   assert.equal(state.draft.pages[0].title, 'Saved page');
+});
+
+test('explains common Supabase setup errors without exposing secrets', () => {
+  assert.match(storageErrorMessage({ code: '42P01' }), /form_state is missing/);
+  assert.match(storageErrorMessage({ code: '42501' }), /denied access/);
 });
