@@ -34,6 +34,8 @@ To diagnose a deployed service after signing in, open `/api/admin/storage-check`
 
 The admin editor loads the draft from `GET /api/admin/form`. `PUT /api/admin/draft` validates and stores draft changes. `POST /api/admin/publish` validates again and creates an immutable-in-practice latest snapshot with a version number and timestamp. The public page can only read that snapshot from `GET /api/public/form`; drafts are never exposed.
 
+The admin builder autosaves draft edits, shows save status, supports required questions, follow-up questions, answer routing, variables, and variable conditions. Incomplete drafts can be saved while they are being built, but publishing remains blocked until the form passes validation.
+
 Admin credentials come from environment variables and the session cookie is HTTP-only and same-site. Set `NODE_ENV=production` to enable secure cookies behind HTTPS.
 
 ## Render and GitHub

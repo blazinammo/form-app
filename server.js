@@ -98,9 +98,7 @@ app.get('/api/admin/storage-check', adminOnly, async (req, res) => {
 app.get('/api/admin/form', adminOnly, async (req, res, next) => { try { res.json(await readState()); } catch (error) { next(error); } });
 app.put('/api/admin/draft', adminOnly, async (req, res, next) => {
   try {
-    const result = validateForm(req.body);
-    if (!result.valid) return res.status(400).json({ error: 'Draft is invalid.', errors: result.errors });
-    const state = await readState(); state.draft = result.form; await writeState(state); res.json({ draft: state.draft });
+    const state = await readState(); state.draft = normalizeForm(req.body); await writeState(state); res.json({ draft: state.draft });
   } catch (error) { next(error); }
 });
 app.post('/api/admin/publish', adminOnly, async (req, res, next) => {

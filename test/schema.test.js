@@ -7,6 +7,7 @@ test('normalizes legacy form shapes with defaults', () => {
   const form = normalizeForm({ pages: [{ title: 'One', questions: [{ text: 'Name', type: 'text' }] }] });
   assert.equal(form.schemaVersion, 1);
   assert.equal(form.pages[0].questions[0].type, 'text');
+  assert.equal(form.pages[0].questions[0].required, true);
   assert.deepEqual(form.pages[0].varConditions, []);
 });
 
