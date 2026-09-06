@@ -105,7 +105,8 @@ app.put('/api/admin/draft', adminOnly, async (req, res, next) => {
 app.post('/api/admin/publish', adminOnly, async (req, res, next) => {
   try {
     const state = await readState();
-    const result = validateForm(state.draft);
+    const candidate = req.body?.draft ? normalizeForm(req.body.draft) : state.draft;
+    const result = validateForm(candidate);
     if (!result.valid) return res.status(400).json({ error: 'Publish blocked until the draft is valid.', errors: result.errors });
     state.draft = result.form; state.published = result.form; state.version += 1; state.publishedAt = new Date().toISOString();
     await writeState(state); res.json({ published: state.published, publishedAt: state.publishedAt, version: state.version });
