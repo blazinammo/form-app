@@ -38,6 +38,8 @@ The admin builder autosaves draft edits, shows save status, supports required qu
 
 The admin Document tab lets an administrator create a document title and heading/paragraph template blocks. Use placeholders such as `{{q_questionId}}` for submitted answers or `{{variableName}}` for calculated variables. After the respondent reaches the final screen, Inspir renders a preview and can download a Word `.docx` generated from the published template and submitted values.
 
+Document templates also support conditional `If block` sections. An admin can show a block when a selected answer is present, such as a Yes response, or when a variable meets a comparison such as `score >= 10`. Text blocks have bold, italic, underline, and font controls; the same formatting and conditions are carried into the generated Word document.
+
 Admin credentials come from environment variables and the session cookie is HTTP-only and same-site. Set `NODE_ENV=production` to enable secure cookies behind HTTPS.
 
 ## Render and GitHub

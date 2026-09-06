@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { normalizeForm, validateForm } = require('../lib/schema');
 const { hydrateState, storageErrorMessage, supabaseProjectUrl } = require('../server');
-const { interpolate, buildContext } = require('../lib/document');
+const { interpolate, buildContext, flattenBlocks, generateDocx } = require('../lib/document');
 
 test('normalizes legacy form shapes with defaults', () => {
   const form = normalizeForm({ pages: [{ title: 'One', questions: [{ text: 'Name', type: 'text' }] }] });
@@ -49,4 +49,15 @@ test('builds document interpolation context from answers', () => {
   const form = { pages: [{ questions: [{ id: 'q1', type: 'text', answers: [] }, { id: 'q2', type: 'radio', answers: [{ id: 'a1', text: 'Accepted' }] }] }] };
   const context = buildContext(form, { q1: 'North', q2: 'a1' }, { score: 4 });
   assert.equal(interpolate('{{q_q1}} / {{q_q2}} / {{score}}', context), 'North / Accepted / 4');
+});
+
+test('includes conditional document text only when its rule matches', () => {
+  const blocks = [{ type: 'conditional', condType: 'answer', answerText: 'yes', text: 'Consent was given.' }, { type: 'conditional', condType: 'variable', varId: 'score', varOp: '>=', varValue: 10, text: 'High priority.' }];
+  assert.equal(flattenBlocks(blocks, {}, { q1: 'yes' }, { score: 12 }).length, 2);
+  assert.equal(flattenBlocks(blocks, {}, { q1: 'no' }, { score: 2 }).length, 0);
+});
+
+test('generates a Word document with formatted runs', async () => {
+  const buffer = await generateDocx({ formTitle: 'Test', pages: [], docTemplate: [{ type: 'paragraph', runs: [{ text: 'Important', bold: true }, { text: ' record', italic: true }] }] }, {}, {});
+  assert.ok(buffer.length > 1000);
 });
