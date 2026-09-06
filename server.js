@@ -5,6 +5,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { createClient } = require('@supabase/supabase-js');
 const { normalizeForm, validateForm } = require('./lib/schema');
+const { generateDocx } = require('./lib/document');
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
@@ -115,6 +116,15 @@ app.get('/api/public/form', async (req, res, next) => {
     const state = await readState();
     if (!state.published) return res.status(404).json({ error: 'No form has been published yet.' });
     res.json({ form: state.published, publishedAt: state.publishedAt, version: state.version });
+  } catch (error) { next(error); }
+});
+app.post('/api/public/document', async (req, res, next) => {
+  try {
+    const state = await readState();
+    if (!state.published) return res.status(404).json({ error: 'No form has been published yet.' });
+    const buffer = await generateDocx(state.published, req.body?.answers || {}, req.body?.variables || {});
+    res.set({ 'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'Content-Disposition': `attachment; filename="${(state.published.docTitle || 'Inspir-document').replace(/[^a-z0-9_-]+/gi, '-').toLowerCase()}.docx"` });
+    res.send(buffer);
   } catch (error) { next(error); }
 });
 

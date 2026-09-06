@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { normalizeForm, validateForm } = require('../lib/schema');
 const { hydrateState, storageErrorMessage, supabaseProjectUrl } = require('../server');
+const { interpolate, buildContext } = require('../lib/document');
 
 test('normalizes legacy form shapes with defaults', () => {
   const form = normalizeForm({ pages: [{ title: 'One', questions: [{ text: 'Name', type: 'text' }] }] });
@@ -42,4 +43,10 @@ test('explains common Supabase setup errors without exposing secrets', () => {
 
 test('normalizes a copied Supabase Data API URL', () => {
   assert.equal(supabaseProjectUrl(' https://project.supabase.co/rest/v1/ '), 'https://project.supabase.co');
+});
+
+test('builds document interpolation context from answers', () => {
+  const form = { pages: [{ questions: [{ id: 'q1', type: 'text', answers: [] }, { id: 'q2', type: 'radio', answers: [{ id: 'a1', text: 'Accepted' }] }] }] };
+  const context = buildContext(form, { q1: 'North', q2: 'a1' }, { score: 4 });
+  assert.equal(interpolate('{{q_q1}} / {{q_q2}} / {{score}}', context), 'North / Accepted / 4');
 });
