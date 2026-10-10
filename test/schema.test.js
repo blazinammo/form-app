@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const { normalizeForm, validateForm } = require('../lib/schema');
 const { hydrateState, storageErrorMessage, supabaseProjectUrl, formReadiness } = require('../server');
 const { interpolate, buildContext, flattenBlocks, generateDocx } = require('../lib/document');
+const { conditionMatches, activeAnswers, questionRequired, nextVisiblePageIndex } = require('../public/rules');
 
 test('normalizes legacy form shapes with defaults', () => {
   const form = normalizeForm({ pages: [{ title: 'One', questions: [{ text: 'Name', type: 'text' }] }] });
@@ -10,6 +11,77 @@ test('normalizes legacy form shapes with defaults', () => {
   assert.equal(form.pages[0].questions[0].type, 'text');
   assert.equal(form.pages[0].questions[0].required, true);
   assert.deepEqual(form.pages[0].varConditions, []);
+  assert.equal(form.pages[0].visibilityCondition, null);
+  assert.equal(form.pages[0].questions[0].requiredWhen, null);
+});
+
+test('normalizes rule groups and validates answer, variable, and question references', () => {
+  const form = {
+    variables:[{id:'score'}],
+    pages:[{id:'p1',title:'Start',questions:[
+      {id:'q1',text:'Choice',type:'radio',answers:[{id:'a1',text:'Yes'}]},
+      {id:'q2',text:'Follow up',visibilityCondition:{match:'any',rules:[
+        {source:'answer',questionId:'q1',answerId:'a1',operator:'selected'},
+        {source:'variable',variableId:'score',operator:'>=',value:5}
+      ]},requiredWhen:{match:'all',rules:[{source:'answer',questionId:'q1',operator:'answered'}]}}
+    ]}]
+  };
+  assert.equal(validateForm(form).valid,true);
+  const invalid = validateForm({...form,pages:[{...form.pages[0],questions:[form.pages[0].questions[1]]}]});
+  assert.equal(invalid.valid,false);
+  assert.ok(invalid.errors.some(error => error.includes('unknown question')));
+});
+
+test('answer and variable conditions support AND and OR groups', () => {
+  const form = {variables:[{id:'score'}],pages:[{id:'p',questions:[{id:'q',answers:[{id:'yes'}]}]}]};
+  const and = {match:'all',rules:[
+    {source:'answer',questionId:'q',answerId:'yes',operator:'selected'},
+    {source:'variable',variableId:'score',operator:'>=',value:4}
+  ]};
+  assert.equal(conditionMatches(form,and,{q:'yes'},{score:4}),true);
+  assert.equal(conditionMatches(form,and,{q:'yes'},{score:3}),false);
+  assert.equal(conditionMatches(form,{...and,match:'any'},{q:'no'},{score:4}),true);
+  assert.equal(conditionMatches(form,{match:'all',rules:[{source:'answer',questionId:'q',answerId:'yes',operator:'notSelected'}]}),true);
+});
+
+test('conditional visibility and requiredness exclude hidden answers and page destinations', () => {
+  const form = {variables:[],pages:[
+    {id:'start',questions:[{id:'gate',type:'radio',answers:[{id:'show'},{id:'hide'}]}]},
+    {id:'details',visibilityCondition:{match:'all',rules:[{source:'answer',questionId:'gate',answerId:'show',operator:'selected'}]},
+      questions:[{id:'secret',type:'text',required:true,visibilityCondition:{match:'all',rules:[{source:'answer',questionId:'gate',answerId:'show',operator:'selected'}]}}]}
+  ]};
+  const answers = {gate:'hide',secret:'must not leak'};
+  assert.deepEqual(activeAnswers(form,answers),{gate:'hide'});
+  assert.equal(questionRequired(form,form.pages[1].questions[0],answers),false);
+  assert.equal(nextVisiblePageIndex(form,1,answers),2);
+  assert.equal(buildContext(form,answers).q_secret,undefined);
+  const conditional = {...form.pages[0].questions[0], required:true, requiredWhen:{
+    match:'all',rules:[{source:'answer',questionId:'gate',answerId:'show',operator:'selected'}]
+  }};
+  assert.equal(questionRequired(form,conditional,answers),false);
+  assert.equal(questionRequired(form,conditional,{gate:'show'}),true);
+});
+
+test('section conditions hide member questions and scope conditional requiredness', () => {
+  const form = {
+    variables:[],
+    pages:[{
+      id:'start',
+      questions:[{id:'gate',text:'Show details?',type:'radio',answers:[{id:'yes'},{id:'no'}]},
+        {id:'detail',text:'Details',type:'text',sectionId:'extra',required:true}],
+      sections:[{
+        id:'extra',title:'Extra details',
+        visibilityCondition:{match:'all',rules:[{source:'answer',questionId:'gate',answerId:'yes',operator:'selected'}]},
+        requiredWhen:{match:'all',rules:[{source:'answer',questionId:'gate',answerId:'yes',operator:'selected'}]}
+      }]
+    }]
+  };
+  assert.equal(validateForm(form).valid,true);
+  const detail = form.pages[0].questions[1];
+  assert.equal(activeAnswers(form,{gate:'no',detail:'hidden'}).detail,undefined);
+  assert.equal(questionRequired(form,detail,{gate:'no'}),false);
+  assert.equal(questionRequired(form,detail,{gate:'yes'}),true);
+  assert.equal(validateForm({...form,pages:[{...form.pages[0],sections:[]}]}).valid,false);
 });
 
 test('rejects an empty or unroutable form', () => {

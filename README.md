@@ -36,6 +36,10 @@ The admin editor loads the draft from `GET /api/admin/form`. `PUT /api/admin/dra
 
 The admin builder autosaves draft edits, shows save status, supports required questions, follow-up questions, answer routing, variables, and variable conditions. Incomplete drafts can be saved while they are being built, but publishing remains blocked until the form passes validation.
 
+Conditional rules are available on pages, question sections, and individual questions. Each rule group matches **all** rules (AND) or **any** rule (OR); rules can test a prior answer selection/answer status or compare a variable. Questions and sections can also become required when a rule matches. Legacy follow-up questions and exported forms without these rule fields continue to normalize with their previous behavior.
+
+The editor offers prior questions as answer-rule sources so a condition does not depend on a future response. At runtime, cycles in imported visibility rules fail closed; navigation past a hidden page advances only to later visible pages, so skipping itself cannot loop.
+
 The admin Document tab lets an administrator create a document title and heading/paragraph template blocks. Use placeholders such as `{{q_questionId}}` for submitted answers or `{{variableName}}` for calculated variables. After the respondent reaches the final screen, Inspir renders a preview and can download a Word `.docx` generated from the published template and submitted values.
 
 Document templates also support conditional `If block` sections. An admin can show a block when a selected answer is present, such as a Yes response, or when a variable meets a comparison such as `score >= 10`. Text blocks have bold, italic, underline, and font controls; the same formatting and conditions are carried into the generated Word document.
