@@ -844,3 +844,78 @@ body { background: var(--paper); color: var(--ink); }
 @media (prefers-reduced-motion: reduce) {
 	.home-page .scroll-reveal, .home-page .scroll-reveal:not(.is-visible) { opacity: 1; transform: none; }
 }
+
+/* Transparent landscape artwork: framed on the dark hero, quiet on the editor canvas. */
+.hero-copy { max-width: 48%; min-width: 0; }
+.hero-art {
+	top: auto;
+	right: 0;
+	bottom: 12%;
+	width: 50%;
+	height: auto;
+	aspect-ratio: 3 / 1;
+	overflow: hidden;
+	border-radius: 7px;
+	background-color: #292a27;
+	background-image: url("/images/formflow-landscape.png"), linear-gradient(135deg, #3b3d39, #292a27);
+	background-position: center;
+	background-repeat: no-repeat;
+	background-size: 100% 100%;
+	box-shadow: 0 12px 32px #0003;
+	transform: none;
+}
+.hero-art > span { display: none; }
+.layout .content {
+	position: relative;
+	isolation: isolate;
+}
+.layout .content::before {
+	position: absolute;
+	z-index: -1;
+	top: 125px;
+	right: 0;
+	width: min(720px, 100%);
+	aspect-ratio: 3 / 1;
+	background-image: linear-gradient(90deg, var(--paper), transparent 58%), url("/images/formflow-landscape.png");
+	background-position: center, right center;
+	background-repeat: no-repeat;
+	background-size: 100% 100%, contain;
+	content: "";
+	opacity: .15;
+	pointer-events: none;
+}
+
+@media (max-width: 1000px) {
+	.hero {
+		min-height: 760px;
+		padding-top: 60px;
+		padding-bottom: 260px;
+	}
+	.hero-copy { max-width: 100%; }
+	.hero-art {
+		bottom: 28px;
+		left: 50%;
+		right: auto;
+		width: min(82%, 650px);
+		transform: translateX(-50%);
+	}
+}
+@media (max-width: 700px) {
+	.hero {
+		min-height: 740px;
+		padding-top: 60px;
+		padding-bottom: 200px;
+	}
+	.hero-art {
+		bottom: 24px;
+		width: min(100%, 560px);
+		opacity: 1;
+	}
+	.hero-copy { width: 100%; }
+	.layout .content::before {
+		top: 118px;
+		width: 100%;
+		background-image: linear-gradient(90deg, var(--paper), transparent 48%), url("/images/formflow-landscape.png");
+		opacity: .1;
+	}
+}
