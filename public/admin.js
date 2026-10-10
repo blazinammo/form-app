@@ -1,6 +1,8 @@
 let state = { draft: null, published: null, version: 0 };
 let activeTab = 'logic';
 let saveTimer = null;
+let readinessTimer = null;
+let saveQueue = Promise.resolve();
 let saveState = 'saved';
 const $ = id => document.getElementById(id);
 const uid = () => `id_${Math.random().toString(36).slice(2, 9)}`;
@@ -10,11 +12,19 @@ function activePage() { return state.draft.pages.find(page => page.id === state.
 function activeQuestion(id) { return activePage()?.questions.find(question => question.id === id); }
 function toast(message) { const el = $('toast'); el.textContent = message; el.classList.add('show'); setTimeout(() => el.classList.remove('show'), 2600); }
 function setSaveState(next) { saveState = next; const el = $('save-state'); if (el) el.textContent = ({ saved:'Saved', saving:'Saving…', unsaved:'Unsaved changes', error:'Save failed', 'publish-error':'Publish needs attention' }[next] || next); }
-function markDirty() { setSaveState('unsaved'); clearTimeout(saveTimer); saveTimer = setTimeout(saveDraft, 800); }
+function markDirty() {
+  setSaveState('unsaved');
+  clearTimeout(saveTimer);
+  clearTimeout(readinessTimer);
+  saveTimer = setTimeout(saveDraft, 800);
+  readinessTimer = setTimeout(refreshReadiness, 350);
+}
 
 function render() { if (!state.draft) return; renderPages(); renderEditor(); renderPanel(); }
 function renderPages() {
   $('pages').innerHTML = state.draft.pages.map((page, index) => `<div class="page-item ${page.id === activePage()?.id ? 'active' : ''}"><button onclick="selectPage('${page.id}')"><div class="page-number">PAGE ${index + 1}</div><div class="page-title">${esc(page.title || 'Untitled')}</div><div class="muted" style="font-size:12px;margin-top:4px">${page.questions.length} questions</div></button>${state.draft.pages.length > 1 ? `<button class="icon-btn" onclick="deletePage('${page.id}')" aria-label="Delete page">×</button>` : ''}</div>`).join('');
+  $('mobile-page').innerHTML = state.draft.pages.map((page, index) => `<option value="${page.id}">Page ${index + 1}: ${esc(page.title || 'Untitled')}</option>`).join('');
+  $('mobile-page').value = activePage()?.id || '';
 }
 function renderEditor() {
   const page = activePage();
@@ -48,10 +58,67 @@ function deleteVariable(id) { state.draft.variables = state.draft.variables.filt
 function addCondition() { const page = activePage(); page.varConditions = page.varConditions || []; page.varConditions.push({id:uid(),varId:state.draft.variables[0].id,op:'>=',value:1,gotoPageId:null}); renderEditor(); markDirty(); }
 function updateCondition(id, field, value) { const condition = (activePage().varConditions || []).find(item => item.id === id); condition[field] = field === 'value' ? Number(value) || 0 : value; markDirty(); }
 function deleteCondition(id) { activePage().varConditions = (activePage().varConditions || []).filter(condition => condition.id !== id); renderEditor(); markDirty(); }
-async function saveDraft() { clearTimeout(saveTimer); setSaveState('saving'); try { const response = await fetch('/api/admin/draft',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(state.draft)}); const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Draft save failed.'); state.draft = data.draft; setSaveState('saved'); return true; } catch (error) { setSaveState('error'); toast(error.message); return false; } }
-async function publish() { clearTimeout(saveTimer); setSaveState('saving'); const response = await fetch('/api/admin/publish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({draft:state.draft})}); const data = await response.json(); if (!response.ok) { setSaveState('publish-error'); const message = data.errors?.[0] || data.error || 'Publish failed.'; const match = message.match(/Page (\d+), question (\d+)/); if (match) { const pageIndex = Number(match[1]) - 1; state.draft.activePage = state.draft.pages[pageIndex]?.id || state.draft.activePage; render(); } toast(message); return; } state.draft = data.published; state.published = data.published; state.version = data.version; setSaveState('saved'); toast(`Published version ${data.version}`); }
+async function saveDraft() {
+  clearTimeout(saveTimer);
+  const snapshot = JSON.stringify(state.draft);
+  setSaveState('saving');
+  const save = saveQueue.then(async () => {
+    try {
+      const response = await fetch('/api/admin/draft', { method:'PUT', headers:{'Content-Type':'application/json'}, body:snapshot });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Draft save failed.');
+      return true;
+    } catch (error) {
+      setSaveState('error');
+      toast(error.message);
+      return false;
+    }
+  });
+  saveQueue = save.then(() => undefined, () => undefined);
+  if (!await save) return false;
+  if (JSON.stringify(state.draft) !== snapshot) return saveDraft();
+  setSaveState('saved');
+  return true;
+}
+async function refreshReadiness() {
+  try {
+    const response = await fetch('/api/admin/readiness', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ draft:state.draft }) });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Readiness check failed.');
+    const issues = [...data.errors.map(message => ({ message, kind:'error' })), ...data.warnings.map(message => ({ message, kind:'warning' }))];
+    $('publish-readiness').innerHTML = `<p class="eyebrow">Publish readiness</p><p class="readiness-status ${data.valid ? 'ready' : 'needs-attention'}">${data.valid ? 'Ready to publish' : 'Needs attention'}${data.warnings.length ? ` · ${data.warnings.length} warning${data.warnings.length === 1 ? '' : 's'}` : ''}</p>${issues.length ? `<ul>${issues.map(issue => `<li class="${issue.kind}">${esc(issue.message)}</li>`).join('')}</ul>` : '<p class="muted">No validation issues or unreachable pages found.</p>'}`;
+  } catch (error) {
+    $('publish-readiness').innerHTML = `<p class="eyebrow">Publish readiness</p><p class="readiness-status needs-attention">Could not check readiness</p><p class="muted">${esc(error.message)}</p>`;
+  }
+}
+async function openDraftPreview() {
+  const preview = window.open('about:blank', '_blank');
+  if (!preview) return toast('Allow pop-ups to open a draft preview.');
+  preview.opener = null;
+  if (await saveDraft()) preview.location.href = '/form.html?preview=1';
+  else preview.close();
+}
+async function publish() { clearTimeout(saveTimer); if (!await saveDraft()) return; setSaveState('saving'); const response = await fetch('/api/admin/publish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({draft:state.draft})}); const data = await response.json(); if (!response.ok) { setSaveState('publish-error'); refreshReadiness(); const message = data.errors?.[0] || data.error || 'Publish failed.'; const match = message.match(/Page (\d+), question (\d+)/); if (match) { const pageIndex = Number(match[1]) - 1; state.draft.activePage = state.draft.pages[pageIndex]?.id || state.draft.activePage; render(); } toast(message); return; } state.draft = { ...data.published, activePage:state.draft.activePage }; state.published = data.published; state.version = data.version; setSaveState('saved'); refreshReadiness(); toast(`Published version ${data.version}`); }
 $('add-page').onclick = addPage;
+$('mobile-add-page').onclick = addPage;
 $('publish').onclick = publish;
+$('preview-draft').onclick = openDraftPreview;
+$('mobile-page').onchange = event => selectPage(event.target.value);
+$('toggle-tools').onclick = () => {
+  const open = !document.querySelector('.layout').classList.contains('inspector-open');
+  setToolsOpen(open);
+};
+function setToolsOpen(open) {
+  document.querySelector('.layout').classList.toggle('inspector-open', open);
+  $('toggle-tools').setAttribute('aria-expanded', String(open));
+  if (open) $('builder-tools').style.top = `${document.querySelector('.topbar').getBoundingClientRect().height}px`;
+}
+$('close-tools').onclick = () => setToolsOpen(false);
+window.addEventListener('resize', () => {
+  if (document.querySelector('.layout').classList.contains('inspector-open')) {
+    $('builder-tools').style.top = `${document.querySelector('.topbar').getBoundingClientRect().height}px`;
+  }
+});
 $('logout').onclick = async () => { await fetch('/api/auth/logout',{method:'POST'}); location.href = '/admin-login.html'; };
 document.querySelectorAll('.tab').forEach(tab => tab.onclick = () => { activeTab = tab.dataset.tab; document.querySelectorAll('.tab').forEach(item => item.classList.toggle('active', item === tab)); renderPanel(); });
 document.querySelector('[data-tab="document"]')?.addEventListener('click', () => renderDocumentPanel(document.getElementById('panel')));
@@ -128,4 +195,4 @@ document.querySelector('[data-tab="document"]')?.addEventListener('click', openD
 function addDocumentDeleteControls() { document.querySelectorAll('.drawer-doc-block:not(.drawer-logic-block)').forEach((block, index) => { if (block.querySelector('.drawer-delete')) return; const button = document.createElement('button'); button.className = 'icon-btn drawer-delete'; button.type = 'button'; button.setAttribute('aria-label', 'Delete document block'); button.textContent = '×'; button.onclick = () => { deleteDocumentBlock(index); renderDocumentDrawer(); }; block.appendChild(button); }); }
 const documentDeleteObserver = new MutationObserver(addDocumentDeleteControls);
 documentDeleteObserver.observe(document.body, { childList:true, subtree:true });
-(async () => { try { const auth = await fetch('/api/auth/session').then(response => response.json()); if (!auth.authenticated) return location.href = '/admin-login.html'; const response = await fetch('/api/admin/form'); if (!response.ok) throw new Error((await response.json()).error || 'Unable to load draft.'); state = await response.json(); state.draft.activePage = state.draft.activePage || state.draft.pages[0]?.id; setSaveState('saved'); render(); } catch (error) { $('editor').innerHTML = `<div class="empty"><h1>Builder unavailable</h1><p class="muted">${esc(error.message)}</p><button class="btn btn-dark" onclick="location.reload()">Retry</button></div>`; } })();
+(async () => { try { const auth = await fetch('/api/auth/session').then(response => response.json()); if (!auth.authenticated) return location.href = '/admin-login.html'; const response = await fetch('/api/admin/form'); if (!response.ok) throw new Error((await response.json()).error || 'Unable to load draft.'); state = await response.json(); state.draft.activePage = state.draft.activePage || state.draft.pages[0]?.id; setSaveState('saved'); render(); refreshReadiness(); } catch (error) { $('editor').innerHTML = `<div class="empty"><h1>Builder unavailable</h1><p class="muted">${esc(error.message)}</p><button class="btn btn-dark" onclick="location.reload()">Retry</button></div>`; } })();

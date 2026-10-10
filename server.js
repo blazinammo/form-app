@@ -78,6 +78,34 @@ function storageErrorMessage(error) {
   const providerCode = error?.code || error?.status || 'unknown';
   return `Supabase storage is unavailable (provider code: ${providerCode}). Check SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, and the form_state table.`;
 }
+function formReadiness(input) {
+  const result = validateForm(input);
+  const reachable = new Set();
+  const pending = result.form.pages.length ? [result.form.pages[0].id] : [];
+  while (pending.length) {
+    const pageId = pending.pop();
+    if (reachable.has(pageId)) continue;
+    reachable.add(pageId);
+    const pageIndex = result.form.pages.findIndex(page => page.id === pageId);
+    const page = result.form.pages[pageIndex];
+    if (!page || page.isEnd) continue;
+    const targets = [
+      page.defaultNextPageId,
+      ...page.varConditions.map(condition => condition.gotoPageId),
+      ...page.questions.flatMap(question => question.answers.map(answer => answer.gotoPageId))
+    ].filter(Boolean);
+    const canFallThrough = !page.defaultNextPageId && (
+      page.questions.length === 0 ||
+      page.questions.some(question => question.required === false || question.type === 'text' || question.answers.length === 0 || question.answers.some(answer => !answer.gotoPageId))
+    );
+    if (canFallThrough && pageIndex + 1 < result.form.pages.length) targets.push(result.form.pages[pageIndex + 1].id);
+    pending.push(...targets);
+  }
+  const warnings = result.form.pages
+    .filter(page => !reachable.has(page.id))
+    .map(page => `Page "${page.title}" may be unreachable from the first page.`);
+  return { valid: result.valid, errors: result.errors, warnings };
+}
 
 app.get('/api/auth/session', (req, res) => res.json({ authenticated: Boolean(req.session.isAdmin), configured: credentialsConfigured() }));
 app.post('/api/auth/login', (req, res) => {
@@ -97,6 +125,23 @@ app.get('/api/admin/storage-check', adminOnly, async (req, res) => {
 });
 
 app.get('/api/admin/form', adminOnly, async (req, res, next) => { try { res.json(await readState()); } catch (error) { next(error); } });
+app.get('/api/admin/preview', adminOnly, async (req, res, next) => {
+  try {
+    const state = await readState();
+    res.json({ form: state.draft, readiness: formReadiness(state.draft) });
+  } catch (error) { next(error); }
+});
+app.post('/api/admin/readiness', adminOnly, (req, res) => {
+  res.json(formReadiness(req.body?.draft));
+});
+app.post('/api/admin/preview/document', adminOnly, async (req, res, next) => {
+  try {
+    const state = await readState();
+    const buffer = await generateDocx(state.draft, req.body?.answers || {}, req.body?.variables || {});
+    res.set({ 'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'Content-Disposition': `attachment; filename="${(state.draft.docTitle || 'Inspir-document').replace(/[^a-z0-9_-]+/gi, '-').toLowerCase()}.docx"` });
+    res.send(buffer);
+  } catch (error) { next(error); }
+});
 app.put('/api/admin/draft', adminOnly, async (req, res, next) => {
   try {
     const state = await readState(); state.draft = normalizeForm(req.body); await writeState(state); res.json({ draft: state.draft });
@@ -134,4 +179,4 @@ app.use((error, req, res, next) => {
   res.status(supabase ? 503 : 500).json({ error: supabase ? storageErrorMessage(error) : 'The server could not complete that request.' });
 });
 if (require.main === module) app.listen(port, () => console.log(`FormFlow listening on port ${port}`));
-module.exports = { app, readState, writeState, hydrateState, storageErrorMessage, supabaseProjectUrl };
+module.exports = { app, readState, writeState, hydrateState, storageErrorMessage, supabaseProjectUrl, formReadiness };

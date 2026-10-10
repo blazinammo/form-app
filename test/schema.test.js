@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { normalizeForm, validateForm } = require('../lib/schema');
-const { hydrateState, storageErrorMessage, supabaseProjectUrl } = require('../server');
+const { hydrateState, storageErrorMessage, supabaseProjectUrl, formReadiness } = require('../server');
 const { interpolate, buildContext, flattenBlocks, generateDocx } = require('../lib/document');
 
 test('normalizes legacy form shapes with defaults', () => {
@@ -21,6 +21,28 @@ test('rejects an empty or unroutable form', () => {
 test('accepts a valid published form', () => {
   const result = validateForm({ pages: [{ id: 'p1', title: 'Start', isEnd: true, questions: [{ id: 'q1', text: 'Choose', type: 'radio', answers: [{ id: 'a1', text: 'Yes' }] }] }] });
   assert.equal(result.valid, true);
+});
+
+test('reports unreachable pages as warnings without blocking publish', () => {
+  const readiness = formReadiness({ pages:[
+    { id:'start', title:'Start', isEnd:true, questions:[] },
+    { id:'orphan', title:'Orphan', questions:[] }
+  ] });
+  assert.equal(readiness.valid, true);
+  assert.deepEqual(readiness.errors, []);
+  assert.deepEqual(readiness.warnings, ['Page "Orphan" may be unreachable from the first page.']);
+});
+
+test('includes sequential fall-through when some answers are not routed', () => {
+  const readiness = formReadiness({ pages:[
+    { id:'start', title:'Start', questions:[{ id:'choice', text:'Choose', type:'radio', answers:[
+      { id:'routed', text:'Routed', gotoPageId:'branch' },
+      { id:'default', text:'Continue' }
+    ] }] },
+    { id:'next', title:'Next', questions:[] },
+    { id:'branch', title:'Branch', isEnd:true, questions:[] }
+  ] });
+  assert.deepEqual(readiness.warnings, []);
 });
 
 test('hydrates a Supabase row with an empty draft', () => {
